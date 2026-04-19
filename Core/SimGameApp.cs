@@ -14,16 +14,21 @@ namespace SimGame.Core
         private const int TileSize       = 16;
         private const int CharacterCount = 20;
 
+        // How close (pixels) a click must be to a character centre to select it
+        private const float CharacterPickRadius = TileSize * 0.8f;
+
         private readonly GraphicsDeviceManager _graphics;
 
-        private SpriteBatch?   _spriteBatch;
-        private Renderer?      _renderer;
-        private Camera?        _camera;
-        private TickSystem?    _ticks;
-        private InputHandler?  _input;
-        private EntityManager? _entities;
-        private World.World?   _world;
-        private DebugHud?      _hud;
+        private SpriteBatch?    _spriteBatch;
+        private Renderer?       _renderer;
+        private Camera?         _camera;
+        private TickSystem?     _ticks;
+        private InputHandler?   _input;
+        private EntityManager?  _entities;
+        private World.World?    _world;
+        private DebugHud?       _hud;
+        private InfoPanel?      _infoPanel;
+        private SelectionState  _selection = new();
 
         public SimGameApp()
         {
@@ -47,18 +52,20 @@ namespace SimGame.Core
             _spriteBatch = new SpriteBatch(GraphicsDevice);
             var font     = Content.Load<SpriteFont>("Arial22");
 
-            _input    = new InputHandler();
-            _ticks    = new TickSystem(tickIntervalSeconds: 0.20f);
-            _renderer = new Renderer(GraphicsDevice, TileSize);
-            _camera   = new Camera(GraphicsDevice);
-            _entities = new EntityManager(TileSize);
-            _hud      = new DebugHud(_spriteBatch, font);
+            _input     = new InputHandler();
+            _ticks     = new TickSystem();
+            _renderer  = new Renderer(GraphicsDevice, TileSize);
+            _camera    = new Camera(GraphicsDevice);
+            _entities  = new EntityManager(TileSize);
+            _hud       = new DebugHud(_spriteBatch, font);
+            _infoPanel = new InfoPanel(_spriteBatch, font, GraphicsDevice);
 
             LoadWorld();
         }
 
         private void LoadWorld(int seed = 0)
         {
+            _selection.Clear();
             _world = new World.World(WorldWidth, WorldHeight, seed);
             _entities!.SpawnCharacters(CharacterCount, _world);
             _renderer!.BakeWorld(_world);
@@ -84,13 +91,50 @@ namespace SimGame.Core
 
             _camera!.Update(dt, _input.State);
 
+            if (_input.JustClicked())
+                HandleClick(_input.MouseScreenPos);
+
             int tickCount = _ticks!.Update(dt);
             for (int i = 0; i < tickCount; i++)
                 _entities!.Tick(_world!, _renderer!);
 
-            _entities!.UpdateRenderPositions(dt);
+            _entities!.UpdateRenderPositions(dt, _ticks.Paused ? 0f : _ticks.SpeedMultiplier);
 
             base.Update(gameTime);
+        }
+
+        private void HandleClick(Vector2 screenPos)
+        {
+            Vector2 worldPos = _camera!.ScreenToWorld(screenPos);
+
+            // 1. Check characters first (they sit on top of tiles)
+            float bestDist = CharacterPickRadius;
+            Entities.Character? picked = null;
+
+            foreach (var c in _entities!.Characters)
+            {
+                float dist = Vector2.Distance(c.Position, worldPos);
+                if (dist < bestDist)
+                {
+                    bestDist = dist;
+                    picked   = c;
+                }
+            }
+
+            if (picked != null)
+            {
+                _selection.SelectCharacter(picked);
+                return;
+            }
+
+            // 2. Fall back to tile
+            int tx = (int)(worldPos.X / TileSize);
+            int ty = (int)(worldPos.Y / TileSize);
+
+            if (_world!.InBounds(tx, ty))
+                _selection.SelectTile(tx, ty);
+            else
+                _selection.Clear();
         }
 
         protected override void Draw(GameTime gameTime)
@@ -99,6 +143,7 @@ namespace SimGame.Core
 
             _renderer!.Draw(_entities!.Characters, _camera!);
             _hud!.Draw(_ticks!, _entities.Characters, _world!.Seed);
+            _infoPanel!.Draw(_selection, _world, GraphicsDevice);
 
             base.Draw(gameTime);
         }
@@ -106,6 +151,7 @@ namespace SimGame.Core
         protected override void UnloadContent()
         {
             _renderer?.Dispose();
+            _infoPanel?.Dispose();
             base.UnloadContent();
         }
     }

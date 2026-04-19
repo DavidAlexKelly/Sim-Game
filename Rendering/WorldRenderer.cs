@@ -4,35 +4,19 @@ using SimGame.World;
 
 namespace SimGame.Rendering
 {
-    /// <summary>
-    /// Bakes the tile grid into a static VertexBuffer once and draws it
-    /// cheaply every frame.
-    ///
-    /// Two passes are baked:
-    ///   1. Terrain layer  — full tile quads, one colour per TileType.
-    ///   2. Food overlay   — smaller centred quads drawn on tiles that have
-    ///                       an available food source, tinted by source type.
-    ///
-    /// Both buffers are rebuilt together when the world changes (R to regen).
-    /// The food overlay is rebuilt each tick by calling BakeFoodOverlay() from
-    /// EntityManager so depleted / respawned sources update in real time.
-    /// </summary>
     public class WorldRenderer
     {
         private readonly GraphicsDevice _gd;
         private readonly int            _tileSize;
 
-        // Terrain (static after world gen)
         private VertexBuffer? _terrainVb;
         private IndexBuffer?  _terrainIb;
         private int           _terrainIndexCount;
 
-        // Food overlay (rebuilt each tick)
         private VertexBuffer? _foodVb;
         private IndexBuffer?  _foodIb;
         private int           _foodIndexCount;
 
-        // Fraction of tile size for the food indicator square
         private const float FoodIndicatorScale = 0.45f;
 
         public WorldRenderer(GraphicsDevice gd, int tileSize)
@@ -41,21 +25,14 @@ namespace SimGame.Rendering
             _tileSize = tileSize;
         }
 
-        /// <summary>
-        /// Call once after world generation. Bakes terrain and initial food overlay.
-        /// </summary>
         public void Bake(World.World world)
         {
             BakeTerrain(world);
             BakeFoodOverlay(world);
         }
 
-        /// <summary>
-        /// Call once per sim tick to reflect consumed / respawned food sources.
-        /// </summary>
         public void BakeFoodOverlay(World.World world)
         {
-            // Count food tiles first so we allocate exactly the right buffer size
             int foodCount = 0;
             for (int x = 0; x < world.Width; x++)
                 for (int y = 0; y < world.Height; y++)
@@ -111,8 +88,6 @@ namespace SimGame.Rendering
             DrawBuffer(_foodVb,    _foodIb,    _foodIndexCount,    effect);
         }
 
-        // ── Internals ────────────────────────────────────────────────────────
-
         private void BakeTerrain(World.World world)
         {
             int count   = world.Width * world.Height;
@@ -127,7 +102,7 @@ namespace SimGame.Rendering
                     ref var tile = ref world.GetTile(x, y);
                     float px = x * _tileSize;
                     float py = y * _tileSize;
-                    float s  = _tileSize - 1;
+                    float s  = _tileSize;      // full tile size, no gap
                     var   c  = tile.Color;
 
                     int baseV = vi;

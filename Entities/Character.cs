@@ -32,26 +32,28 @@ namespace SimGame.Entities
         public CharacterGoal  Goal  { get; private set; } = CharacterGoal.Idle;
         public CharacterState State { get; private set; } = CharacterState.Idle;
 
-        // ── Free movement ────────────────────────────────────────────────────
-        /// <summary>World-pixel position (centre of character).</summary>
+        // ── Position & movement ──────────────────────────────────────────────
+        /// <summary>World-pixel position (centre of character). Updated every frame.</summary>
         public Vector2 Position { get; private set; }
 
-        /// <summary>Tiles per tick the character can travel.</summary>
-        public float Speed { get; }
+        /// <summary>
+        /// Base movement speed in world-pixels per second at 1x tick speed.
+        /// Scaled by the tick speed multiplier each frame so the simulation
+        /// looks faster/slower as expected.
+        /// </summary>
+        public float BasePixelsPerSecond { get; }
 
-        /// <summary>Current destination in world pixels.</summary>
+        /// <summary>Current destination in world pixels, set each tick by AI.</summary>
         private Vector2 _targetPos;
 
-        /// <summary>How close (pixels) before we consider the target reached.</summary>
         private const float ArrivalThreshold = 1.5f;
 
         // ── Behaviours ───────────────────────────────────────────────────────
         private readonly WanderBehaviour   _wander = new();
         private readonly SeekTileBehaviour _seeker = new();
 
-        // ── Render ───────────────────────────────────────────────────────────
-        /// <summary>Smoothed visual position — lerped toward Position each frame.</summary>
-        public Vector2 RenderPos { get; private set; }
+        /// <summary>Equals Position — kept so EntityRenderer doesn't need changing.</summary>
+        public Vector2 RenderPos => Position;
 
         private static readonly string[] NamePool =
         {
@@ -65,39 +67,30 @@ namespace SimGame.Entities
             Id   = id;
             Name = NamePool[new Random(id * 7).Next(NamePool.Length)] + " " + id;
 
-            // Speed: 1.5–3.5 tiles per tick, varied per character
-            Speed = 1.5f + new Random(id * 31).NextSingle() * 2f;
+            // 1–3 tiles per second at 1x speed, varied per character
+            BasePixelsPerSecond = tileSize * (1f + new Random(id * 31).NextSingle() * 2f);
 
             Hunger = new Random(id * 13).NextSingle() * 0.30f;
 
             var startPx = TileCentre(startX, startY, tileSize);
-            Position    = startPx;
-            _targetPos  = startPx;
-            RenderPos   = startPx;
+            Position   = startPx;
+            _targetPos = startPx;
         }
 
-        // ── Tile helpers (read-only, used by behaviours) ─────────────────────
-
-        /// <summary>Tile column the character's centre currently occupies.</summary>
+        // ── Tile helpers ─────────────────────────────────────────────────────
         public int TileX(int tileSize) => (int)(Position.X / tileSize);
-
-        /// <summary>Tile row the character's centre currently occupies.</summary>
         public int TileY(int tileSize) => (int)(Position.Y / tileSize);
 
-        // ── Sim tick ─────────────────────────────────────────────────────────
-
+        // ── Sim tick: AI decisions only ───────────────────────────────────────
         public void Tick(World.World world, Random rng, int tileSize)
         {
-            // 1. Update need
             Hunger = Math.Min(1f, Hunger + HungerRisePerTick);
 
             int tx = TileX(tileSize);
             int ty = TileY(tileSize);
 
-            // 2. Select goal
             Goal = SelectGoal(world, tx, ty);
 
-            // 3. Execute goal
             switch (Goal)
             {
                 case CharacterGoal.Eating:
@@ -114,13 +107,36 @@ namespace SimGame.Entities
                     ExecuteWander(world, rng, tileSize, tx, ty);
                     break;
             }
+        }
 
-            // 4. Move toward target by up to Speed tiles this tick
-            MoveTowardTarget(tileSize);
+        // ── Frame update: smooth continuous movement ──────────────────────────
+        /// <summary>
+        /// Called every frame. Moves Position toward _targetPos at
+        /// BasePixelsPerSecond * speedMultiplier, so the simulation looks
+        /// proportionally faster or slower as tick speed changes.
+        /// </summary>
+        public void UpdateRenderPos(float deltaSeconds, float speedMultiplier)
+        {
+            Vector2 delta = _targetPos - Position;
+            float   dist  = delta.Length();
+
+            if (dist <= ArrivalThreshold)
+            {
+                Position = _targetPos;
+                if (Goal != CharacterGoal.Eating)
+                    State = CharacterState.Idle;
+                return;
+            }
+
+            float step = BasePixelsPerSecond * speedMultiplier * deltaSeconds;
+            Position = dist <= step
+                ? _targetPos
+                : Position + Vector2.Normalize(delta) * step;
+
+            State = CharacterState.Moving;
         }
 
         // ── Goal selection ────────────────────────────────────────────────────
-
         private CharacterGoal SelectGoal(World.World world, int tx, int ty)
         {
             if (Goal == CharacterGoal.Eating
@@ -138,7 +154,6 @@ namespace SimGame.Entities
         }
 
         // ── Behaviour execution ───────────────────────────────────────────────
-
         private void ExecuteSeekFood(World.World world, Random rng, int tileSize, int tx, int ty)
         {
             if (_seeker.TryGetTargetTile(tx, ty, world, rng,
@@ -156,7 +171,6 @@ namespace SimGame.Entities
 
         private void ExecuteWander(World.World world, Random rng, int tileSize, int tx, int ty)
         {
-            // Only pick a new wander target when we've arrived at the current one
             if (Vector2.Distance(Position, _targetPos) < ArrivalThreshold)
             {
                 if (_wander.TryGetTarget(tx, ty, world, rng, tileSize, out Vector2 target))
@@ -171,39 +185,7 @@ namespace SimGame.Entities
             }
         }
 
-        // ── Movement ─────────────────────────────────────────────────────────
-
-        private void MoveTowardTarget(int tileSize)
-        {
-            float maxDistance = Speed * tileSize;
-            Vector2 delta     = _targetPos - Position;
-            float   dist      = delta.Length();
-
-            if (dist <= ArrivalThreshold)
-            {
-                Position = _targetPos;
-                if (Goal != CharacterGoal.Eating)
-                    State = CharacterState.Idle;
-                return;
-            }
-
-            Position = dist <= maxDistance
-                ? _targetPos
-                : Position + Vector2.Normalize(delta) * maxDistance;
-
-            State = CharacterState.Moving;
-        }
-
-        // ── Visual lerp ──────────────────────────────────────────────────────
-
-        public void UpdateRenderPos(float deltaSeconds, float lerpSpeed = 0.20f)
-        {
-            float t   = 1f - MathF.Pow(1f - lerpSpeed, deltaSeconds * 60f);
-            RenderPos = Vector2.Lerp(RenderPos, Position, t);
-        }
-
         // ── Utility ──────────────────────────────────────────────────────────
-
         private static Vector2 TileCentre(int gx, int gy, int tileSize)
             => new Vector2(gx * tileSize + tileSize * 0.5f,
                            gy * tileSize + tileSize * 0.5f);

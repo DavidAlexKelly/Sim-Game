@@ -3,16 +3,11 @@ using System.Collections.Generic;
 using SimGame.Rendering;
 using SimGame.World;
 
-
 namespace SimGame.Entities
 {
     /// <summary>
     /// Owns all entities. Responsible for spawning, ticking, and
     /// updating render positions each frame.
-    ///
-    /// Also drives World.Tick() (food respawn) and triggers a food overlay
-    /// rebake on the renderer after each sim tick so depleted / regrown
-    /// sources appear immediately.
     /// </summary>
     public class EntityManager
     {
@@ -47,11 +42,6 @@ namespace SimGame.Entities
             }
         }
 
-        /// <summary>
-        /// Called once per sim tick. Ticks the world (food respawn), then
-        /// all characters, then rebuilds the food overlay so the renderer
-        /// reflects any consumed or regrown sources.
-        /// </summary>
         public void Tick(World.World world, Renderer renderer)
         {
             world.Tick();
@@ -62,11 +52,14 @@ namespace SimGame.Entities
             renderer.BakeFoodOverlay(world);
         }
 
-        /// <summary>Called every frame to smooth visual positions.</summary>
-        public void UpdateRenderPositions(float deltaSeconds)
+        /// <summary>
+        /// Called every frame. speedMultiplier comes from TickSystem so
+        /// movement visually scales with simulation speed.
+        /// </summary>
+        public void UpdateRenderPositions(float deltaSeconds, float speedMultiplier)
         {
             foreach (var c in _characters)
-                c.UpdateRenderPos(deltaSeconds);
+                c.UpdateRenderPos(deltaSeconds, speedMultiplier);
         }
     }
 }

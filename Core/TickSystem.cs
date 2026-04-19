@@ -3,22 +3,25 @@ namespace SimGame.Core
     /// <summary>
     /// Decouples simulation speed from frame rate.
     /// Accumulates elapsed time and fires ticks at a fixed interval.
+    ///
+    /// Speed multipliers:
+    ///   0.5x →  1 tick / 2 s
+    ///   1x   →  1 tick / 1 s
+    ///   3x   →  3 ticks / 1 s
+    ///   8x   →  8 ticks / 1 s
     /// </summary>
     public class TickSystem
     {
-        public bool  Paused           { get; private set; }
-        public float SpeedMultiplier  { get; private set; } = 1f;
-        public int   TotalTicks       { get; private set; }
+        public bool  Paused          { get; private set; }
+        public float SpeedMultiplier { get; private set; } = 1f;
+        public int   TotalTicks      { get; private set; }
 
-        private readonly float _tickInterval;   // seconds between ticks
-        private float          _accumulator;
+        // Base interval at 1x speed: one tick per second
+        private const float BaseTickInterval = 1.0f;
 
-        public TickSystem(float tickIntervalSeconds = 0.20f)
-        {
-            _tickInterval = tickIntervalSeconds;
-        }
+        private float _accumulator;
 
-        public void TogglePause()             => Paused = !Paused;
+        public void TogglePause()              => Paused = !Paused;
         public void SetSpeed(float multiplier) => SpeedMultiplier = multiplier;
 
         /// <summary>
@@ -31,10 +34,11 @@ namespace SimGame.Core
 
             _accumulator += deltaSeconds * SpeedMultiplier;
 
+            float interval = BaseTickInterval;
             int ticks = 0;
-            while (_accumulator >= _tickInterval)
+            while (_accumulator >= interval)
             {
-                _accumulator -= _tickInterval;
+                _accumulator -= interval;
                 ticks++;
                 TotalTicks++;
             }
