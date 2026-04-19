@@ -1,48 +1,49 @@
 using System;
+using Microsoft.Xna.Framework;
 using SimGame.World;
 
 namespace SimGame.Entities.AI
 {
     /// <summary>
-    /// Picks a random adjacent walkable tile each tick.
-    /// Self-contained so it can be swapped out for pathfinding later
-    /// without touching Character.
+    /// Picks a random walkable tile within a short radius and returns its
+    /// world-space centre. The character then moves freely toward it.
+    /// Self-contained so it can be swapped without touching Character.
     /// </summary>
     public class WanderBehaviour
     {
-        private static readonly (int dx, int dy)[] Directions =
+        // How many tiles away (Chebyshev) the character will consider wandering to
+        private const int WanderRadius = 4;
+
+        public bool TryGetTarget(int tileX, int tileY, World.World world, Random rng,
+                                 int tileSize, out Vector2 target)
         {
-            (0, -1), (1, 0), (0, 1), (-1, 0)
-        };
+            // Collect candidate tiles in a square radius, then pick one at random
+            // to avoid any directional bias.
+            Span<(int x, int y)> candidates = stackalloc (int, int)[WanderRadius * WanderRadius * 4];
+            int count = 0;
 
-        public bool TryGetNextMove(int x, int y, World.World world, Random rng,
-                                   out int nextX, out int nextY)
-        {
-            // Copy directions and shuffle to avoid directional bias
-            var dirs = (Span<(int, int)>)stackalloc (int, int)[4];
-            for (int i = 0; i < 4; i++) dirs[i] = Directions[i];
-
-            for (int i = 3; i > 0; i--)
+            for (int dx = -WanderRadius; dx <= WanderRadius; dx++)
             {
-                int j = rng.Next(i + 1);
-                (dirs[i], dirs[j]) = (dirs[j], dirs[i]);
-            }
-
-            foreach (var (dx, dy) in dirs)
-            {
-                int nx = x + dx;
-                int ny = y + dy;
-                if (world.IsWalkable(nx, ny))
+                for (int dy = -WanderRadius; dy <= WanderRadius; dy++)
                 {
-                    nextX = nx;
-                    nextY = ny;
-                    return true;
+                    if (dx == 0 && dy == 0) continue;   // don't stand still
+                    int nx = tileX + dx;
+                    int ny = tileY + dy;
+                    if (world.IsWalkable(nx, ny) && count < candidates.Length)
+                        candidates[count++] = (nx, ny);
                 }
             }
 
-            nextX = x;
-            nextY = y;
-            return false;
+            if (count == 0)
+            {
+                target = default;
+                return false;
+            }
+
+            var (cx, cy) = candidates[rng.Next(count)];
+            target = new Vector2(cx * tileSize + tileSize * 0.5f,
+                                 cy * tileSize + tileSize * 0.5f);
+            return true;
         }
     }
 }

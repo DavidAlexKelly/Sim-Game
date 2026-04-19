@@ -5,31 +5,30 @@ using SimGame.World;
 namespace SimGame.Entities.AI
 {
     /// <summary>
-    /// Finds the nearest tile matching a predicate via BFS, then returns
-    /// the first step toward it. Stateless — recalculates each tick, which
-    /// is fine at this scale and means it reacts instantly to world changes.
+    /// Finds the nearest tile matching a predicate via BFS and returns its
+    /// tile coordinates. The caller (Character) converts to a world-space
+    /// position and moves freely toward it at their own speed.
     ///
-    /// Swap out the BFS for A* here later without touching Character at all.
+    /// Previously this returned only the *first step* toward the target,
+    /// forcing grid-snapped movement. Now it returns the *goal tile* so
+    /// the character can travel in a straight line.
     /// </summary>
     public class SeekTileBehaviour
     {
-        private const int MaxSearchRadius = 40; // tiles; keeps BFS cheap
+        private const int MaxSearchRadius = 40;
 
-        public bool TryStepToward(
+        public bool TryGetTargetTile(
             int startX, int startY,
             World.World world,
             Random rng,
             Func<World.World, int, int, bool> isTarget,
-            out int nextX, out int nextY)
+            out int goalX, out int goalY)
         {
-            // ── BFS to find nearest target tile ──────────────────────────────
             var visited = new HashSet<(int, int)>();
-            var queue   = new Queue<(int x, int y, int firstStepX, int firstStepY)>();
+            var queue   = new Queue<(int x, int y)>();
 
             visited.Add((startX, startY));
 
-            // Seed the queue with immediate neighbours, shuffled to avoid
-            // directional bias when multiple targets are equidistant
             var dirs = new (int dx, int dy)[] { (0,-1),(1,0),(0,1),(-1,0) };
             Shuffle(dirs, rng);
 
@@ -38,21 +37,20 @@ namespace SimGame.Entities.AI
                 int nx = startX + dx, ny = startY + dy;
                 if (!world.IsWalkable(nx, ny)) continue;
                 if (visited.Add((nx, ny)))
-                    queue.Enqueue((nx, ny, nx, ny));
+                    queue.Enqueue((nx, ny));
             }
 
             while (queue.Count > 0)
             {
-                var (cx, cy, fx, fy) = queue.Dequeue();
+                var (cx, cy) = queue.Dequeue();
 
-                // Manhattan distance check — keep search bounded
                 if (Math.Abs(cx - startX) + Math.Abs(cy - startY) > MaxSearchRadius)
                     continue;
 
                 if (isTarget(world, cx, cy))
                 {
-                    nextX = fx;
-                    nextY = fy;
+                    goalX = cx;
+                    goalY = cy;
                     return true;
                 }
 
@@ -61,12 +59,12 @@ namespace SimGame.Entities.AI
                     int nx = cx + dx, ny = cy + dy;
                     if (!world.IsWalkable(nx, ny)) continue;
                     if (visited.Add((nx, ny)))
-                        queue.Enqueue((nx, ny, fx, fy));
+                        queue.Enqueue((nx, ny));
                 }
             }
 
-            nextX = startX;
-            nextY = startY;
+            goalX = startX;
+            goalY = startY;
             return false;
         }
 
