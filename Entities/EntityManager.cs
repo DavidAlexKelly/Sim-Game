@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using SimGame.Core;
 using SimGame.Rendering;
 using SimGame.World;
 
@@ -27,12 +28,10 @@ namespace SimGame.Entities
         {
             _characters.Clear();
             int placed = 0, attempts = 0;
-
             while (placed < count && attempts < count * 20)
             {
                 int x = _rng.Next(world.Width);
                 int y = _rng.Next(world.Height);
-
                 if (world.IsWalkable(x, y))
                 {
                     _characters.Add(new Character(placed + 1, x, y, _tileSize));
@@ -42,9 +41,13 @@ namespace SimGame.Entities
             }
         }
 
-        public void Tick(World.World world, Renderer renderer)
+        /// <summary>
+        /// Advances the world and all characters by one sim tick.
+        /// TimeSystem is passed through so World can update temperature.
+        /// </summary>
+        public void Tick(World.World world, Renderer renderer, TimeSystem time)
         {
-            world.Tick();
+            world.Tick(time);
 
             foreach (var c in _characters)
                 c.Tick(world, _rng, _tileSize);
@@ -52,10 +55,6 @@ namespace SimGame.Entities
             renderer.BakeFoodOverlay(world);
         }
 
-        /// <summary>
-        /// Called every frame. speedMultiplier comes from TickSystem so
-        /// movement visually scales with simulation speed.
-        /// </summary>
         public void UpdateRenderPositions(float deltaSeconds, float speedMultiplier)
         {
             foreach (var c in _characters)

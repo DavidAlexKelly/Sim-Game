@@ -9,26 +9,29 @@ namespace SimGame.Core
 {
     public class SimGameApp : Game
     {
-        private const int WorldWidth     = 128;
-        private const int WorldHeight    = 128;
-        private const int TileSize       = 16;
+        // Larger world so 1 degree of latitude spans the full map height.
+        // At 0.0078 degrees/tile, 512 tiles = ~4 degrees, 256 = ~2 degrees,
+        // 128 = exactly 1 degree top to bottom.
+        // We keep 128 so the span is exactly 1 degree as intended,
+        // but increase tile resolution to make the world feel larger on screen.
+        private const int WorldWidth     = 256;
+        private const int WorldHeight    = 256;
+        private const int TileSize       = 8;   // smaller tiles = more world visible
         private const int CharacterCount = 20;
-
-        // How close (pixels) a click must be to a character centre to select it
-        private const float CharacterPickRadius = TileSize * 0.8f;
+        private const float CharacterPickRadius = TileSize * 1.5f;
 
         private readonly GraphicsDeviceManager _graphics;
-
-        private SpriteBatch?    _spriteBatch;
-        private Renderer?       _renderer;
-        private Camera?         _camera;
-        private TickSystem?     _ticks;
-        private InputHandler?   _input;
-        private EntityManager?  _entities;
-        private World.World?    _world;
-        private DebugHud?       _hud;
-        private InfoPanel?      _infoPanel;
-        private SelectionState  _selection = new();
+        private SpriteBatch?   _spriteBatch;
+        private Renderer?      _renderer;
+        private Camera?        _camera;
+        private TickSystem?    _ticks;
+        private TimeSystem?    _time;
+        private InputHandler?  _input;
+        private EntityManager? _entities;
+        private World.World?   _world;
+        private DebugHud?      _hud;
+        private InfoPanel?     _infoPanel;
+        private SelectionState _selection = new();
 
         public SimGameApp()
         {
@@ -38,7 +41,7 @@ namespace SimGame.Core
                 PreferredBackBufferHeight = 720
             };
             Content.RootDirectory = "Content";
-            IsMouseVisible        = true;
+            IsMouseVisible = true;
         }
 
         protected override void Initialize()
@@ -50,11 +53,12 @@ namespace SimGame.Core
         protected override void LoadContent()
         {
             _spriteBatch = new SpriteBatch(GraphicsDevice);
-            var font     = Content.Load<SpriteFont>("Arial22");
+            var font = Content.Load<SpriteFont>("Arial22");
 
             _input     = new InputHandler();
             _ticks     = new TickSystem();
-            _renderer  = new Renderer(GraphicsDevice, TileSize);
+            _time      = new TimeSystem();
+            _renderer  = new Renderer(GraphicsDevice, _spriteBatch, TileSize);
             _camera    = new Camera(GraphicsDevice);
             _entities  = new EntityManager(TileSize);
             _hud       = new DebugHud(_spriteBatch, font);
@@ -66,10 +70,10 @@ namespace SimGame.Core
         private void LoadWorld(int seed = 0)
         {
             _selection.Clear();
-            _world = new World.World(WorldWidth, WorldHeight, seed);
+            _time!.Reset();
+            _world = new World.World(WorldWidth, WorldHeight, _time, seed);
             _entities!.SpawnCharacters(CharacterCount, _world);
             _renderer!.BakeWorld(_world);
-
             _camera!.CentreOn(
                 WorldWidth  * TileSize * 0.5f,
                 WorldHeight * TileSize * 0.5f);
@@ -88,6 +92,8 @@ namespace SimGame.Core
             if (_input.JustPressed(Keys.D2))      _ticks!.SetSpeed(1f);
             if (_input.JustPressed(Keys.D3))      _ticks!.SetSpeed(3f);
             if (_input.JustPressed(Keys.D4))      _ticks!.SetSpeed(8f);
+            if (_input.JustPressed(Keys.D5))      _ticks!.SetSpeed(16f);
+            if (_input.JustPressed(Keys.D6))      _ticks!.SetSpeed(32f);
 
             _camera!.Update(dt, _input.State);
 
@@ -95,10 +101,14 @@ namespace SimGame.Core
                 HandleClick(_input.MouseScreenPos);
 
             int tickCount = _ticks!.Update(dt);
-            for (int i = 0; i < tickCount; i++)
-                _entities!.Tick(_world!, _renderer!);
+            _time!.Advance(tickCount);
 
-            _entities!.UpdateRenderPositions(dt, _ticks.Paused ? 0f : _ticks.SpeedMultiplier);
+            for (int i = 0; i < tickCount; i++)
+                _entities!.Tick(_world!, _renderer!, _time);
+
+            _entities!.UpdateRenderPositions(
+                dt,
+                _ticks.Paused ? 0f : _ticks.SpeedMultiplier);
 
             base.Update(gameTime);
         }
@@ -107,27 +117,17 @@ namespace SimGame.Core
         {
             Vector2 worldPos = _camera!.ScreenToWorld(screenPos);
 
-            // 1. Check characters first (they sit on top of tiles)
             float bestDist = CharacterPickRadius;
             Entities.Character? picked = null;
 
             foreach (var c in _entities!.Characters)
             {
                 float dist = Vector2.Distance(c.Position, worldPos);
-                if (dist < bestDist)
-                {
-                    bestDist = dist;
-                    picked   = c;
-                }
+                if (dist < bestDist) { bestDist = dist; picked = c; }
             }
 
-            if (picked != null)
-            {
-                _selection.SelectCharacter(picked);
-                return;
-            }
+            if (picked != null) { _selection.SelectCharacter(picked); return; }
 
-            // 2. Fall back to tile
             int tx = (int)(worldPos.X / TileSize);
             int ty = (int)(worldPos.Y / TileSize);
 
@@ -141,8 +141,8 @@ namespace SimGame.Core
         {
             GraphicsDevice.Clear(new Color(15, 15, 15));
 
-            _renderer!.Draw(_entities!.Characters, _camera!);
-            _hud!.Draw(_ticks!, _entities.Characters, _world!.Seed);
+            _renderer!.Draw(_entities!.Characters, _camera!, _time!, _world!.Weather);
+            _hud!.Draw(_ticks!, _time!, _world!, _entities.Characters, _world!.Seed);
             _infoPanel!.Draw(_selection, _world, GraphicsDevice);
 
             base.Draw(gameTime);
