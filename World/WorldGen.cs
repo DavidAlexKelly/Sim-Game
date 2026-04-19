@@ -9,12 +9,19 @@ namespace SimGame.World
     public class WorldGen
     {
         private readonly FastNoiseLite _noise;
+        private readonly Random        _rng;
 
         public int Seed { get; }
+
+        // Probability that a qualifying terrain tile gets a food source
+        private const float BerryBushChance = 0.06f;   // 6% of Grass tiles
+        private const float FruitTreeChance = 0.08f;   // 8% of Forest tiles
 
         public WorldGen(int seed = 0)
         {
             Seed = seed == 0 ? new Random().Next(1, int.MaxValue) : seed;
+
+            _rng = new Random(Seed);
 
             _noise = new FastNoiseLite(Seed);
             _noise.SetNoiseType(FastNoiseLite.NoiseType.OpenSimplex2);
@@ -28,12 +35,24 @@ namespace SimGame.World
             var tiles = new Tile[width, height];
 
             for (int x = 0; x < width; x++)
+            {
                 for (int y = 0; y < height; y++)
                 {
-                    // Normalise noise from [-1,1] to [0,1]
                     float n = (_noise.GetNoise(x, y) + 1f) * 0.5f;
                     tiles[x, y] = Tile.FromType(HeightToTile(n));
+
+                    // Scatter food sources on walkable terrain
+                    ref var tile = ref tiles[x, y];
+                    tile.Food = tile.Type switch
+                    {
+                        TileType.Grass  when _rng.NextSingle() < BerryBushChance
+                            => FoodSource.Create(FoodSourceType.BerryBush),
+                        TileType.Forest when _rng.NextSingle() < FruitTreeChance
+                            => FoodSource.Create(FoodSourceType.FruitTree),
+                        _ => FoodSource.Empty
+                    };
                 }
+            }
 
             return tiles;
         }

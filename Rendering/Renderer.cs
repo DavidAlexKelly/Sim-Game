@@ -44,6 +44,13 @@ namespace SimGame.Rendering
         public void BakeWorld(World.World world)
             => _worldRenderer.Bake(world);
 
+        /// <summary>
+        /// Exposed so EntityManager can trigger a food overlay rebuild
+        /// after each sim tick without holding a reference to WorldRenderer directly.
+        /// </summary>
+        public void BakeFoodOverlay(World.World world)
+            => _worldRenderer.BakeFoodOverlay(world);
+
         public void Draw(IReadOnlyList<Character> characters, Camera camera)
         {
             _effect.View = camera.GetMatrix();

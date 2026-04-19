@@ -9,12 +9,10 @@ namespace SimGame.Core
 {
     public class SimGameApp : Game
     {
-        // ── Config ───────────────────────────────────────────────────────────
-        private const int WorldWidth      = 128;
-        private const int WorldHeight     = 128;
-        private const int TileSize        = 16;
-        private const int CharacterCount  = 20;
-        // ────────────────────────────────────────────────────────────────────
+        private const int WorldWidth     = 128;
+        private const int WorldHeight    = 128;
+        private const int TileSize       = 16;
+        private const int CharacterCount = 20;
 
         private readonly GraphicsDeviceManager _graphics;
 
@@ -88,7 +86,7 @@ namespace SimGame.Core
 
             int tickCount = _ticks!.Update(dt);
             for (int i = 0; i < tickCount; i++)
-                _entities!.Tick(_world!);
+                _entities!.Tick(_world!, _renderer!);
 
             _entities!.UpdateRenderPositions(dt);
 
@@ -100,8 +98,6 @@ namespace SimGame.Core
             GraphicsDevice.Clear(new Color(15, 15, 15));
 
             _renderer!.Draw(_entities!.Characters, _camera!);
-
-            // Pass the full character list so the HUD can read goals and hunger
             _hud!.Draw(_ticks!, _entities.Characters, _world!.Seed);
 
             base.Draw(gameTime);

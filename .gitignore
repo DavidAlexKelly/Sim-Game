@@ -1,0 +1,22 @@
+# Build output
+bin/
+obj/
+
+# MonoGame content intermediate files
+Content/bin/
+Content/obj/
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.user
+*.suo
+*.userprefs
+
+# macOS
+.DS_Store
+
+# dotnet
+*.nupkg
+*.snupkg
+project.lock.json

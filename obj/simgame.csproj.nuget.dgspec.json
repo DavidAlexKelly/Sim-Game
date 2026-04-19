@@ -1,15 +1,15 @@
 {
   "format": 1,
   "restore": {
-    "/Users/davidkelly/Documents/David/Personal Projects/Sim Game/simgame.csproj": {}
+    "/Users/davidkelly/Documents/David/Personal Projects/Sim Game/SimGame.csproj": {}
   },
   "projects": {
-    "/Users/davidkelly/Documents/David/Personal Projects/Sim Game/simgame.csproj": {
+    "/Users/davidkelly/Documents/David/Personal Projects/Sim Game/SimGame.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "/Users/davidkelly/Documents/David/Personal Projects/Sim Game/simgame.csproj",
+        "projectUniqueName": "/Users/davidkelly/Documents/David/Personal Projects/Sim Game/SimGame.csproj",
         "projectName": "SimGame",
-        "projectPath": "/Users/davidkelly/Documents/David/Personal Projects/Sim Game/simgame.csproj",
+        "projectPath": "/Users/davidkelly/Documents/David/Personal Projects/Sim Game/SimGame.csproj",
         "packagesPath": "/Users/davidkelly/.nuget/packages/",
         "outputPath": "/Users/davidkelly/Documents/David/Personal Projects/Sim Game/obj/",
         "projectStyle": "PackageReference",

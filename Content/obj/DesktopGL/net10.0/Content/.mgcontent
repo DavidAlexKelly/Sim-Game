@@ -4,7 +4,7 @@
   <Platform>DesktopGL</Platform>
   <Config />
   <SourceFiles>
-    <File>/Users/davidkelly/Documents/David/Personal Projects/simgame/Content/Arial22.spritefont</File>
+    <File>/Users/davidkelly/Documents/David/Personal Projects/Sim Game/Content/Arial22.spritefont</File>
   </SourceFiles>
   <DestFiles>
     <File xsi:nil="true" />

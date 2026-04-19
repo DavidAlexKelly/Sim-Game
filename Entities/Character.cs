@@ -5,12 +5,6 @@ using SimGame.World;
 
 namespace SimGame.Entities
 {
-    /// <summary>
-    /// The character's high-level goal. Drives which behaviour runs each tick.
-    /// Idle    – no urgent need; wanders.
-    /// SeekingFood – hunger is critical; moving toward the nearest food tile.
-    /// Eating  – arrived at a food tile; restoring hunger over several ticks.
-    /// </summary>
     public enum CharacterGoal
     {
         Idle,
@@ -18,10 +12,6 @@ namespace SimGame.Entities
         Eating
     }
 
-    /// <summary>
-    /// Low-level movement state, kept separate from the goal so the HUD
-    /// can show both independently.
-    /// </summary>
     public enum CharacterState { Idle, Moving }
 
     public class Character
@@ -31,32 +21,28 @@ namespace SimGame.Entities
         public string Name { get; }
 
         // ── Needs ───────────────────────────────────────────────────────────
-        /// <summary>
-        /// 0 = full, 1 = starving. Rises every tick; eating restores it.
-        /// </summary>
         public float Hunger { get; private set; }
 
-        private const float HungerRisePerTick  = 0.004f;  // ~250 ticks to starve
-        private const float HungerEatPerTick   = 0.05f;   // ~20 ticks to recover fully
-        private const float HungerSeekThreshold = 0.40f;  // start seeking food here
-        private const float HungerSatisfied     = 0.10f;  // stop eating here
+        private const float HungerRisePerTick   = 0.004f;
+        private const float HungerEatPerTick    = 0.05f;
+        private const float HungerSeekThreshold = 0.40f;
+        private const float HungerSatisfied     = 0.10f;
 
         // ── Goal / State ────────────────────────────────────────────────────
         public CharacterGoal  Goal  { get; private set; } = CharacterGoal.Idle;
         public CharacterState State { get; private set; } = CharacterState.Idle;
 
-        // ── Simulation state (grid space) ───────────────────────────────────
+        // ── Simulation state ────────────────────────────────────────────────
         public int GridX { get; private set; }
         public int GridY { get; private set; }
 
-        // ── Visual state (pixel space, interpolated between ticks) ──────────
+        // ── Visual state ────────────────────────────────────────────────────
         public Vector2 RenderPos { get; private set; }
 
-        private Vector2              _targetRenderPos;
+        private Vector2                    _targetRenderPos;
         private readonly WanderBehaviour   _wander = new();
         private readonly SeekTileBehaviour _seeker = new();
 
-        // ── Name pool ───────────────────────────────────────────────────────
         private static readonly string[] NamePool =
         {
             "Aldric", "Berra", "Corvin", "Dwyn",  "Erlan",
@@ -72,7 +58,6 @@ namespace SimGame.Entities
             GridX = startX;
             GridY = startY;
 
-            // Stagger starting hunger so characters don't all seek food at once
             Hunger = new Random(id * 13).NextSingle() * 0.30f;
 
             var startPx = GridToPixel(startX, startY, tileSize);
@@ -80,19 +65,20 @@ namespace SimGame.Entities
             _targetRenderPos = startPx;
         }
 
-        /// <summary>Advance one simulation tick.</summary>
         public void Tick(World.World world, Random rng, int tileSize)
         {
-            // ── 1. Update need ───────────────────────────────────────────────
+            // 1. Update need
             Hunger = Math.Min(1f, Hunger + HungerRisePerTick);
 
-            // ── 2. Select goal ───────────────────────────────────────────────
+            // 2. Select goal
             Goal = SelectGoal(world);
 
-            // ── 3. Execute goal ──────────────────────────────────────────────
+            // 3. Execute goal
             switch (Goal)
             {
                 case CharacterGoal.Eating:
+                    // Consume one portion from the tile this tick, restore hunger
+                    world.ConsumeFood(GridX, GridY);
                     Hunger = Math.Max(0f, Hunger - HungerEatPerTick);
                     State  = CharacterState.Idle;
                     break;
@@ -101,7 +87,6 @@ namespace SimGame.Entities
                     ExecuteSeekFood(world, rng, tileSize);
                     break;
 
-                case CharacterGoal.Idle:
                 default:
                     ExecuteWander(world, rng, tileSize);
                     break;
@@ -112,15 +97,17 @@ namespace SimGame.Entities
 
         private CharacterGoal SelectGoal(World.World world)
         {
-            // If already eating and not yet satisfied, keep eating
-            if (Goal == CharacterGoal.Eating && Hunger > HungerSatisfied)
+            // Keep eating while tile still has food and character still hungry
+            if (Goal == CharacterGoal.Eating
+                && Hunger > HungerSatisfied
+                && world.HasFood(GridX, GridY))
                 return CharacterGoal.Eating;
 
-            // Standing on a food tile and hungry enough to eat
-            if (Hunger > HungerSatisfied && IsFoodTile(world, GridX, GridY))
+            // Stepped onto an available food tile — start eating
+            if (Hunger > HungerSatisfied && world.HasFood(GridX, GridY))
                 return CharacterGoal.Eating;
 
-            // Hunger is urgent – go find food
+            // Hunger is urgent — seek nearest food source
             if (Hunger >= HungerSeekThreshold)
                 return CharacterGoal.SeekingFood;
 
@@ -131,16 +118,15 @@ namespace SimGame.Entities
 
         private void ExecuteSeekFood(World.World world, Random rng, int tileSize)
         {
-            // Ask the seeker to step toward the nearest food tile
             if (_seeker.TryStepToward(GridX, GridY, world, rng,
-                    static (w, x, y) => IsFoodTile(w, x, y),
+                    static (w, x, y) => w.HasFood(x, y),
                     out int nx, out int ny))
             {
                 MoveTo(nx, ny, tileSize);
             }
             else
             {
-                // No food reachable – fall back to wandering
+                // No food reachable in range — fall back to wandering
                 ExecuteWander(world, rng, tileSize);
             }
         }
@@ -155,24 +141,14 @@ namespace SimGame.Entities
 
         private void MoveTo(int nx, int ny, int tileSize)
         {
-            GridX = nx;
-            GridY = ny;
-            State = CharacterState.Moving;
+            GridX            = nx;
+            GridY            = ny;
+            State            = CharacterState.Moving;
             _targetRenderPos = GridToPixel(GridX, GridY, tileSize);
-        }
-
-        // ── Tile queries ─────────────────────────────────────────────────────
-
-        private static bool IsFoodTile(World.World world, int x, int y)
-        {
-            if (!world.InBounds(x, y)) return false;
-            var t = world.GetTile(x, y).Type;
-            return t == TileType.Grass || t == TileType.Forest;
         }
 
         // ── Visual lerp ─────────────────────────────────────────────────────
 
-        /// <summary>Smooth render position toward target — called every frame.</summary>
         public void UpdateRenderPos(float deltaSeconds, float lerpSpeed = 0.18f)
         {
             float t   = 1f - MathF.Pow(1f - lerpSpeed, deltaSeconds * 60f);
