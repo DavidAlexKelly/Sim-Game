@@ -65,7 +65,6 @@ namespace SimGame.Core
             _entities!.SpawnCharacters(CharacterCount, _world);
             _renderer!.BakeWorld(_world);
 
-            // Centre camera on the world
             _camera!.CentreOn(
                 WorldWidth  * TileSize * 0.5f,
                 WorldHeight * TileSize * 0.5f);
@@ -77,24 +76,20 @@ namespace SimGame.Core
 
             _input!.Update();
 
-            // ── One-shot actions ─────────────────────────────────────────────
             if (_input.JustPressed(Keys.Escape)) Exit();
             if (_input.JustPressed(Keys.Space))  _ticks!.TogglePause();
-            if (_input.JustPressed(Keys.R))       LoadWorld();         // new random seed
+            if (_input.JustPressed(Keys.R))       LoadWorld();
             if (_input.JustPressed(Keys.D1))      _ticks!.SetSpeed(0.5f);
             if (_input.JustPressed(Keys.D2))      _ticks!.SetSpeed(1f);
             if (_input.JustPressed(Keys.D3))      _ticks!.SetSpeed(3f);
             if (_input.JustPressed(Keys.D4))      _ticks!.SetSpeed(8f);
 
-            // ── Camera (uses held keys internally) ───────────────────────────
             _camera!.Update(dt, _input.State);
 
-            // ── Sim ticks ────────────────────────────────────────────────────
             int tickCount = _ticks!.Update(dt);
             for (int i = 0; i < tickCount; i++)
                 _entities!.Tick(_world!);
 
-            // ── Visual lerp (every frame) ────────────────────────────────────
             _entities!.UpdateRenderPositions(dt);
 
             base.Update(gameTime);
@@ -105,7 +100,9 @@ namespace SimGame.Core
             GraphicsDevice.Clear(new Color(15, 15, 15));
 
             _renderer!.Draw(_entities!.Characters, _camera!);
-            _hud!.Draw(_ticks!, _entities.Characters.Count, _world!.Seed);
+
+            // Pass the full character list so the HUD can read goals and hunger
+            _hud!.Draw(_ticks!, _entities.Characters, _world!.Seed);
 
             base.Draw(gameTime);
         }
